@@ -82,6 +82,55 @@ app.get("/random-word", async (req, res) => {
     }
 });
 
+//Store Score into leaderboard table
+app.post("/userscore", async (req, res) => {
+    try {
+        const { msisdn, correctScore, incorrectScore, userTime } = req.body;
+
+        if (!msisdn || correctScore === undefined || incorrectScore === undefined || userTime === undefined) {
+            return res.status(400).json({ error: "All fields are required" });
+        }
+
+        await pool.query(
+            "INSERT INTO leaderboard (msisdn, correctScore, incorrectScore, userTime) VALUES (?, ?, ?, ?)",
+            [msisdn, correctScore, incorrectScore, userTime]
+        );
+
+        res.json({ message: "Score saved successfully!" });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Server error" });
+    }
+});
+
+
+//For Login
+app.post("/login", async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ error: "Email and password are required" });
+        }
+
+        const [rows] = await pool.query(
+            "SELECT * FROM admin WHERE email = ? AND password = ?",
+            [email, password]
+        );
+
+        if (rows.length > 0) {
+            res.json({ success: true, message: "Login successful" });
+        } else {
+            res.status(401).json({ success: false, message: "Invalid credentials" });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Server error" });
+    }
+});
+
+
+
 // Start the server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
