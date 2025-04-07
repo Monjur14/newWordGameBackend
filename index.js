@@ -57,6 +57,17 @@ app.get("/words", async (req, res) => {
 });
 
 
+//Delete the word
+app.delete("/delete-word/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        await pool.query("DELETE FROM words WHERE id = ?", [id]);
+        res.json({ message: "Word deleted successfully!" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // API to get a random word by length
 app.get("/random-word", async (req, res) => {
     try {
@@ -123,6 +134,26 @@ app.post("/login", async (req, res) => {
         } else {
             res.status(401).json({ success: false, message: "Invalid credentials" });
         }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Server error" });
+    }
+});
+
+//
+app.get("/leaderboard", async (req, res) => {
+    try {
+        const { date } = req.query;
+        let query = "SELECT * FROM leaderboard";
+        let values = [];
+
+        if (date) {
+            query += " WHERE DATE(played_at) = ?";
+            values.push(date);
+        }
+
+        const [rows] = await pool.query(query, values);
+        res.json(rows);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Server error" });
