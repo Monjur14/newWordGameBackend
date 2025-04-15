@@ -94,26 +94,74 @@ app.get("/random-word", async (req, res) => {
 });
 
 //Store Score into leaderboard table
+// app.post("/userscore", async (req, res) => {
+//     try {
+//         const { msisdn, correctScore, incorrectScore, userTime } = req.body;
+
+//         if (!msisdn || correctScore === undefined || incorrectScore === undefined || userTime === undefined) {
+//             return res.status(400).json({ error: "All fields are required" });
+//         }
+
+//         await pool.query(
+//             "INSERT INTO leaderboard (msisdn, correctScore, incorrectScore, userTime) VALUES (?, ?, ?, ?)",
+//             [msisdn, correctScore, incorrectScore, userTime]
+//         );
+
+//         res.json({ message: "Score saved successfully!" });
+//     } catch (err) {
+//         console.error(err);
+//         res.status(500).json({ error: "Server error" });
+//     }
+// });
+
+
 app.post("/userscore", async (req, res) => {
     try {
-        const { msisdn, correctScore, incorrectScore, userTime } = req.body;
-
-        if (!msisdn || correctScore === undefined || incorrectScore === undefined || userTime === undefined) {
-            return res.status(400).json({ error: "All fields are required" });
+      const { msisdn, correctScore, incorrectScore, userTime } = req.body;
+  
+      if (!msisdn || correctScore === undefined || incorrectScore === undefined || userTime === undefined) {
+        return res.status(400).json({ error: "All fields are required" });
+      }
+  
+      const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+  
+      const [existing] = await pool.query(
+        "SELECT * FROM leaderboard WHERE msisdn = ? AND played_at = ?",
+        [msisdn, today]
+      );
+  
+      if (existing.length > 0) {
+        const current = existing[0];
+  
+        // Define "better score" logic
+        const isBetter =
+          correctScore > current.correctScore ||
+          (correctScore === current.correctScore && incorrectScore < current.incorrectScore) ||
+          (correctScore === current.correctScore && incorrectScore === current.incorrectScore && userTime < current.userTime);
+  
+        if (isBetter) {
+          await pool.query(
+            "UPDATE leaderboard SET correctScore = ?, incorrectScore = ?, userTime = ? WHERE id = ?",
+            [correctScore, incorrectScore, userTime, current.id]
+          );
+          return res.json({ message: "Score updated successfully!" });
+        } else {
+          return res.json({ message: "Existing score is better. No update made." });
         }
-
+      } else {
         await pool.query(
-            "INSERT INTO leaderboard (msisdn, correctScore, incorrectScore, userTime) VALUES (?, ?, ?, ?)",
-            [msisdn, correctScore, incorrectScore, userTime]
+          "INSERT INTO leaderboard (msisdn, correctScore, incorrectScore, userTime, played_at) VALUES (?, ?, ?, ?, ?)",
+          [msisdn, correctScore, incorrectScore, userTime, today]
         );
-
-        res.json({ message: "Score saved successfully!" });
+        return res.json({ message: "Score saved successfully!" });
+      }
+  
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Server error" });
+      console.error(err);
+      res.status(500).json({ error: "Server error" });
     }
-});
-
+  });
+  
 
 //For Login
 app.post("/login", async (req, res) => {
@@ -159,6 +207,27 @@ app.get("/leaderboard", async (req, res) => {
         res.status(500).json({ error: "Server error" });
     }
 });
+
+
+app.get("/public-leaderboard", async (req, res) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+  
+      const [results] = await pool.query(
+        `SELECT msisdn, correctScore, incorrectScore, userTime 
+         FROM leaderboard 
+         WHERE played_at = ? 
+         ORDER BY correctScore DESC, incorrectScore ASC, userTime ASC 
+         LIMIT 100`,
+        [today]
+      );
+  
+      res.json(results);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
 
 
 
