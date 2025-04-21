@@ -41,3 +41,15 @@ CREATE TABLE users (
 INSERT INTO admin (email, password) 
 VALUES ('admin@wordgame.com', 'admin123);
 
+
+
+//For Reffer
+CREATE TABLE referrals (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  referrer_msisdn VARCHAR(20) NOT NULL,
+  referred_msisdn VARCHAR(20) NOT NULL,
+  referred_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+
+

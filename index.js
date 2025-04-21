@@ -230,6 +230,44 @@ app.get("/public-leaderboard", async (req, res) => {
   });
 
 
+  app.post("/save-referral", async (req, res) => {
+    try {
+      const { referrer_msisdn, referred_msisdn } = req.body;
+  
+      if (!referrer_msisdn || !referred_msisdn) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+  
+      // Prevent self-referral
+      if (referrer_msisdn === referred_msisdn) {
+        return res.status(400).json({ error: "Self-referral not allowed" });
+      }
+  
+      // Check if the referred_msisdn already exists
+      const [existing] = await pool.query(
+        "SELECT * FROM referrals WHERE referred_msisdn = ?",
+        [referred_msisdn]
+      );
+  
+      if (existing.length > 0) {
+        return res.status(409).json({ message: "Referral already exists for this user" });
+      }
+  
+      // Insert the referral
+      await pool.query(
+        "INSERT INTO referrals (referrer_msisdn, referred_msisdn) VALUES (?, ?)",
+        [referrer_msisdn, referred_msisdn]
+      );
+  
+      res.json({ message: "Referral saved successfully!" });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+  
+
+
 
 // Start the server
 const PORT = process.env.PORT || 5000;
