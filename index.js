@@ -2,36 +2,136 @@ const express = require("express");
 const mysql = require("mysql2");
 const cors = require("cors");
 require("dotenv").config();
+const multer = require("multer");
+const path = require("path");
 
 // Create an Express app
 const app = express();
 app.use(cors());
 
-// Middleware to parse JSON request bodies
+// Middleware
 app.use(express.json());
 
 // Set up MySQL connection pool
 const pool = mysql
   .createPool({
-    host: "127.0.0.1", // XAMPP MySQL runs on localhost
-    user: "root", // Default MySQL user in XAMPP
-    password: "", // Default is an empty password (no password)
-    database: "wordgame", // The database you created in phpMyAdmin
-    charset: "utf8mb4", // Supports Bangla characters
+    host: "127.0.0.1", 
+    user: "root", 
+    password: "", 
+    database: "wordgame",
+    charset: "utf8mb4",
   })
-  .promise(); // Enable promise support
+  .promise(); 
 
-// Test MySQL connection
+// MySQL connection
 (async () => {
   try {
     const connection = await pool.getConnection();
     console.log("Connected to MySQL database");
-    connection.release(); // Release connection after testing
+    connection.release(); 
   } catch (err) {
     console.error("Database connection error:", err);
-    process.exit(1); // Exit the app if DB connection fails
+    process.exit(1); 
   }
 })();
+
+
+const fs = require("fs");
+const uploadsDir = path.join(__dirname, "uploads");
+
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+// Set up static file serving for uploaded images
+
+// Set up multer
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "uploads/"),
+  filename: (req, file, cb) =>
+    cb(null, Date.now() + path.extname(file.originalname)),
+});
+const upload = multer({ storage });
+
+// Static access to uploaded images
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Upload ad
+app.post("/upload-ad", upload.single("image"), async (req, res) => {
+  try {
+    const { redirect_link, status } = req.body;
+    if (!req.file) return res.status(400).json({ error: "Image required" });
+
+    const image_url = `/uploads/${req.file.filename}`;
+    await pool.query(
+      "INSERT INTO ads (image_url, redirect_link, status) VALUES (?, ?, ?)",
+      [image_url, redirect_link, status || "inactive"]
+    );
+
+    res.json({ message: "Ad uploaded successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Upload failed" });
+  }
+});
+
+//Fetch all ads
+app.get("/ads", async (req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT * FROM ads ORDER BY id DESC");
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch ads" });
+  }
+});
+
+// PUT: Update ad status by ID
+app.put("/update-ad-status/:id", async (req, res) => {
+  const adId = req.params.id;
+  const { status } = req.body;
+
+  if (!["active", "inactive"].includes(status)) {
+    return res.status(400).json({ error: "Invalid status value" });
+  }
+
+  try {
+    const [result] = await pool.query(
+      "UPDATE ads SET status = ? WHERE id = ?",
+      [status, adId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Ad not found" });
+    }
+
+    res.json({ message: "Ad status updated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to update ad status" });
+  }
+});
+
+// DELETE: Delete ad by ID
+app.delete("/delete-ad/:id", async (req, res) => {
+  const adId = req.params.id;
+
+  try {
+    const [result] = await pool.query("DELETE FROM ads WHERE id = ?", [adId]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Ad not found" });
+    }
+
+    res.json({ message: "Ad deleted successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to delete ad" });
+  }
+});
+
+
+
+
 
 // API to add a new word
 app.post("/add-bangla-word", async (req, res) => {
@@ -52,6 +152,8 @@ app.post("/add-bangla-word", async (req, res) => {
 });
 
 
+
+//Add multiple words at once
 app.post("/add-words", async (req, res) => {
   try {
     const { words } = req.body;
@@ -59,8 +161,9 @@ app.post("/add-words", async (req, res) => {
       return res.status(400).json({ error: "No words provided" });
     }
 
-    const values = words.map(word => [word.trim()]);
-    await pool.query("INSERT INTO words (word) VALUES ?", [values]);
+    const values = words.map(word => [word.trim(), word.trim().length]);
+
+    await pool.query("INSERT INTO words (word, length) VALUES ?", [values]);
 
     res.json({ message: `${words.length} words added successfully.` });
   } catch (err) {
@@ -68,6 +171,37 @@ app.post("/add-words", async (req, res) => {
     res.status(500).json({ error: "Failed to insert words" });
   }
 });
+
+
+//Player Login
+app.post("/playerlogin", async (req, res) => {
+  try {
+    const { msisdn, referred_by, bkash_number } = req.body;
+
+    if (!msisdn) {
+      return res.status(400).json({ error: "MSISDN are required" });
+    }
+
+    // Check if user already exists
+    const [existing] = await pool.query("SELECT * FROM user WHERE msisdn = ?", [msisdn]);
+    if (existing.length > 0) {
+      return res.json({ message: "User already logged in", user: existing[0] });
+    }
+
+    // Insert new user
+    await pool.query(
+      "INSERT INTO user (msisdn, referred_by, bkash_number) VALUES (?, ?, ?)",
+      [msisdn, referred_by || null, bkash_number || null]
+    );
+
+    res.json({ message: "User login recorded successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
 
 
 // API to get all words
@@ -102,7 +236,6 @@ app.get("/random-word", async (req, res) => {
       return res.status(400).json({ error: "Length parameter is required" });
     }
 
-    // Fetch a random word of the given length
     const [words] = await pool.query(
       "SELECT * FROM words WHERE length = ? ORDER BY RAND() LIMIT 1",
       [length]
@@ -114,32 +247,12 @@ app.get("/random-word", async (req, res) => {
         .json({ error: "No word found for the given length" });
     }
 
-    res.json(words[0]); // Return the randomly selected word
+    res.json(words[0]); 
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-//Store Score into leaderboard table
-// app.post("/userscore", async (req, res) => {
-//     try {
-//         const { msisdn, correctScore, incorrectScore, userTime } = req.body;
-
-//         if (!msisdn || correctScore === undefined || incorrectScore === undefined || userTime === undefined) {
-//             return res.status(400).json({ error: "All fields are required" });
-//         }
-
-//         await pool.query(
-//             "INSERT INTO leaderboard (msisdn, correctScore, incorrectScore, userTime) VALUES (?, ?, ?, ?)",
-//             [msisdn, correctScore, incorrectScore, userTime]
-//         );
-
-//         res.json({ message: "Score saved successfully!" });
-//     } catch (err) {
-//         console.error(err);
-//         res.status(500).json({ error: "Server error" });
-//     }
-// });
 
 app.post("/userscore", async (req, res) => {
   try {
@@ -197,7 +310,7 @@ app.post("/userscore", async (req, res) => {
   }
 });
 
-//For Login
+//For Admin Login
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -319,6 +432,51 @@ app.post("/save-referral", async (req, res) => {
     bn;
   } catch (err) {
     console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
+
+
+// Update user's bKash number
+app.post("/update-bkash", async (req, res) => {
+  const { msisdn, bkash_number } = req.body;
+
+  if (!msisdn || !bkash_number) {
+    return res.status(400).json({ error: "Both MSISDN and bKash number are required" });
+  }
+
+  try {
+    // Check if bKash number already exists
+    const [check] = await pool.query("SELECT * FROM user WHERE bkash_number = ?", [bkash_number]);
+
+    if (check.length > 0) {
+      return res.status(409).json({ error: "bKash number already exists" });
+    }
+
+    // Update bKash number
+    await pool.query("UPDATE user SET bkash_number = ? WHERE msisdn = ?", [bkash_number, msisdn]);
+
+    res.json({ message: "bKash number added successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Get user's bKash number
+app.get("/get-bkash/:msisdn", async (req, res) => {
+  const { msisdn } = req.params;
+
+  try {
+    const [rows] = await pool.query("SELECT bkash_number FROM user WHERE msisdn = ?", [msisdn]);
+    if (rows.length > 0) {
+      res.json({ bkash_number: rows[0].bkash_number });
+    } else {
+      res.status(404).json({ error: "User not found" });
+    }
+  } catch (err) {
     res.status(500).json({ error: "Server error" });
   }
 });

@@ -39,7 +39,7 @@ CREATE TABLE users (
 
 //create email, pass for admin
 INSERT INTO admin (email, password) 
-VALUES ('admin@wordgame.com', 'admin123);
+VALUES ('admin@wordgame.com', 'admin123');
 
 
 
@@ -49,6 +49,26 @@ CREATE TABLE referrals (
   referrer_msisdn VARCHAR(20) NOT NULL,
   referred_msisdn VARCHAR(20) NOT NULL,
   referred_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+
+//For user Table
+CREATE TABLE user (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  msisdn VARCHAR(20) NOT NULL UNIQUE,
+  referred_by VARCHAR(20),
+  bkash_number VARCHAR(20),
+  joining_date DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+
+//for ads image section
+CREATE TABLE ads (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  image_url VARCHAR(255),
+  redirect_link VARCHAR(255),
+  status ENUM('active', 'inactive') DEFAULT 'inactive',
+  uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 
