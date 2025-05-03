@@ -51,6 +51,14 @@ CREATE TABLE referrals (
   referred_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE referral_payments (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  referrer_msisdn VARCHAR(20) NOT NULL,
+  amount INT NOT NULL,
+  paid_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+
 
 //For user Table
 CREATE TABLE user (

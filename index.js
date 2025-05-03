@@ -429,7 +429,7 @@ app.post("/save-referral", async (req, res) => {
     );
 
     res.json({ message: "Referral saved successfully!" });
-    bn;
+    // bn;
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
@@ -477,6 +477,88 @@ app.get("/get-bkash/:msisdn", async (req, res) => {
       res.status(404).json({ error: "User not found" });
     }
   } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
+
+
+// Referral Summary API
+app.get("/referrals/summary", async (req, res) => {
+  const summaryQuery = `
+  SELECT 
+    r.referrer_msisdn,
+    COUNT(DISTINCT r.referred_msisdn) AS total_referrals,
+    GROUP_CONCAT(DISTINCT r.referred_msisdn) AS referred_numbers,
+    COUNT(DISTINCT r.referred_msisdn) * 10 AS total_earn,
+    IFNULL(p.total_paid, 0) AS total_paid,
+    (COUNT(DISTINCT r.referred_msisdn) * 10 - IFNULL(p.total_paid, 0)) AS pending_amount
+  FROM referrals r
+  LEFT JOIN (
+    SELECT referrer_msisdn, SUM(amount) AS total_paid
+    FROM referral_payments
+    GROUP BY referrer_msisdn
+  ) p ON r.referrer_msisdn = p.referrer_msisdn
+  GROUP BY r.referrer_msisdn
+`;
+
+  try {
+    const [results] = await pool.query(summaryQuery);  // Using the connection pool
+    const formatted = results.map((r) => ({
+      referrer_msisdn: r.referrer_msisdn,
+      total_referrals: r.total_referrals,
+      referred_numbers: r.referred_numbers ? r.referred_numbers.split(",") : [],
+      total_earn: r.total_earn,
+      total_paid: r.total_paid,
+      pending_amount: r.pending_amount,
+    }));
+
+    res.json(formatted);
+  } catch (err) {
+    console.error('Error fetching referral summary:', err);
+    res.status(500).json({ error: "Server error while fetching referral summary" });
+  }
+});
+
+app.post("/referrals/pay", async (req, res) => {
+  const { referrer_msisdn, amount } = req.body;
+
+  if (!referrer_msisdn || !amount || amount <= 0) {
+    return res.status(400).json({ error: "Invalid input" });
+  }
+
+  try {
+    // Calculate total earned
+    const [summary] = await pool.query(
+      `SELECT COUNT(*) AS total_referrals FROM referrals WHERE referrer_msisdn = ?`,
+      [referrer_msisdn]
+    );
+    const totalEarn = summary[0].total_referrals * 10;
+
+    // Calculate total paid
+    const [payments] = await pool.query(
+      `SELECT SUM(amount) AS total_paid FROM referral_payments WHERE referrer_msisdn = ?`,
+      [referrer_msisdn]
+    );
+    const totalPaid = payments[0].total_paid || 0;
+
+    const pendingAmount = totalEarn - totalPaid;
+
+    // Prevent overpayment
+    if (amount > pendingAmount) {
+      return res.status(400).json({ error: "Amount exceeds pending balance" });
+    }
+
+    // All good – insert payment
+    await pool.query(
+      "INSERT INTO referral_payments (referrer_msisdn, amount) VALUES (?, ?)",
+      [referrer_msisdn, amount]
+    );
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
