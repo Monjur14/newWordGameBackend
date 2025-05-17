@@ -79,5 +79,12 @@ CREATE TABLE ads (
   uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-
+//Store other games score
+CREATE TABLE externalgamescore (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    gameName VARCHAR(255),
+    score INT,
+    msisdn VARCHAR(20),
+    timeStamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 

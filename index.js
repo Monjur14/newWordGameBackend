@@ -36,13 +36,13 @@ const pool = mysql
 })();
 
 
+//Configuration for file upload
 const fs = require("fs");
 const uploadsDir = path.join(__dirname, "uploads");
 
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
-// Set up static file serving for uploaded images
 
 // Set up multer
 const storage = multer.diskStorage({
@@ -85,7 +85,7 @@ app.get("/ads", async (req, res) => {
   }
 });
 
-// PUT: Update ad status by ID
+// update ad status by ID
 app.put("/update-ad-status/:id", async (req, res) => {
   const adId = req.params.id;
   const { status } = req.body;
@@ -111,7 +111,7 @@ app.put("/update-ad-status/:id", async (req, res) => {
   }
 });
 
-// DELETE: Delete ad by ID
+// Delete ad by ID
 app.delete("/delete-ad/:id", async (req, res) => {
   const adId = req.params.id;
 
@@ -128,9 +128,6 @@ app.delete("/delete-ad/:id", async (req, res) => {
     res.status(500).json({ error: "Failed to delete ad" });
   }
 });
-
-
-
 
 
 // API to add a new word
@@ -151,8 +148,6 @@ app.post("/add-bangla-word", async (req, res) => {
   }
 });
 
-
-
 //Add multiple words at once
 app.post("/add-words", async (req, res) => {
   try {
@@ -172,8 +167,7 @@ app.post("/add-words", async (req, res) => {
   }
 });
 
-
-//Player Login
+// Player Login with MSISDN
 app.post("/playerlogin", async (req, res) => {
   try {
     const { msisdn, referred_by, bkash_number } = req.body;
@@ -202,9 +196,7 @@ app.post("/playerlogin", async (req, res) => {
 });
 
 
-
-
-// API to get all words
+// get all words
 app.get("/words", async (req, res) => {
   try {
     const [words] = await pool.query(
@@ -227,7 +219,7 @@ app.delete("/delete-word/:id", async (req, res) => {
   }
 });
 
-// API to get a random word by length
+// get a random word by length
 app.get("/random-word", async (req, res) => {
   try {
     const { length } = req.query;
@@ -254,6 +246,7 @@ app.get("/random-word", async (req, res) => {
 });
 
 
+// insert user score
 app.post("/userscore", async (req, res) => {
   try {
     const { msisdn, correctScore, incorrectScore, userTime } = req.body;
@@ -267,7 +260,7 @@ app.post("/userscore", async (req, res) => {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    const today = new Date().toISOString().split("T")[0]; // 'YYYY-MM-DD'
+    const today = new Date().toISOString().split("T")[0]; 
 
     const [existing] = await pool.query(
       "SELECT * FROM leaderboard WHERE msisdn = ? AND played_at = ?",
@@ -277,7 +270,6 @@ app.post("/userscore", async (req, res) => {
     if (existing.length > 0) {
       const current = existing[0];
 
-      // Define "better score" logic
       const isBetter =
         correctScore > current.correctScore ||
         (correctScore === current.correctScore &&
@@ -310,6 +302,7 @@ app.post("/userscore", async (req, res) => {
   }
 });
 
+
 //For Admin Login
 app.post("/login", async (req, res) => {
   try {
@@ -335,7 +328,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-//
+// Get leaderboard data for admin dashboard
 app.get("/leaderboard", async (req, res) => {
   try {
     const { fromDate, toDate } = req.query;
@@ -361,6 +354,7 @@ app.get("/leaderboard", async (req, res) => {
   }
 });
 
+// Get winners of the previous day
 app.get("/winners", async (req, res) => {
   try {
     const query = `
@@ -377,6 +371,7 @@ app.get("/winners", async (req, res) => {
   }
 });
 
+// Leaderboard for public view
 app.get("/public-leaderboard", async (req, res) => {
   try {
     const today = new Date().toISOString().split("T")[0];
@@ -397,6 +392,53 @@ app.get("/public-leaderboard", async (req, res) => {
   }
 });
 
+
+// Update user's bKash number
+app.post("/update-bkash", async (req, res) => {
+  const { msisdn, bkash_number } = req.body;
+
+  if (!msisdn || !bkash_number) {
+    return res.status(400).json({ error: "Both MSISDN and bKash number are required" });
+  }
+
+  try {
+    // Check if bKash number already exists
+    const [check] = await pool.query("SELECT * FROM user WHERE bkash_number = ?", [bkash_number]);
+
+    if (check.length > 0) {
+      return res.status(409).json({ error: "bKash number already exists" });
+    }
+
+    // Update bKash number
+    await pool.query("UPDATE user SET bkash_number = ? WHERE msisdn = ?", [bkash_number, msisdn]);
+
+    res.json({ message: "bKash number added successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
+// Get user's bKash number
+app.get("/get-bkash/:msisdn", async (req, res) => {
+  const { msisdn } = req.params;
+
+  try {
+    const [rows] = await pool.query("SELECT bkash_number FROM user WHERE msisdn = ?", [msisdn]);
+    if (rows.length > 0) {
+      res.json({ bkash_number: rows[0].bkash_number });
+    } else {
+      res.status(404).json({ error: "User not found" });
+    }
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
+
+// save referral information
 app.post("/save-referral", async (req, res) => {
   try {
     const { referrer_msisdn, referred_msisdn } = req.body;
@@ -437,54 +479,7 @@ app.post("/save-referral", async (req, res) => {
 });
 
 
-
-
-// Update user's bKash number
-app.post("/update-bkash", async (req, res) => {
-  const { msisdn, bkash_number } = req.body;
-
-  if (!msisdn || !bkash_number) {
-    return res.status(400).json({ error: "Both MSISDN and bKash number are required" });
-  }
-
-  try {
-    // Check if bKash number already exists
-    const [check] = await pool.query("SELECT * FROM user WHERE bkash_number = ?", [bkash_number]);
-
-    if (check.length > 0) {
-      return res.status(409).json({ error: "bKash number already exists" });
-    }
-
-    // Update bKash number
-    await pool.query("UPDATE user SET bkash_number = ? WHERE msisdn = ?", [bkash_number, msisdn]);
-
-    res.json({ message: "bKash number added successfully" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-// Get user's bKash number
-app.get("/get-bkash/:msisdn", async (req, res) => {
-  const { msisdn } = req.params;
-
-  try {
-    const [rows] = await pool.query("SELECT bkash_number FROM user WHERE msisdn = ?", [msisdn]);
-    if (rows.length > 0) {
-      res.json({ bkash_number: rows[0].bkash_number });
-    } else {
-      res.status(404).json({ error: "User not found" });
-    }
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-
-
-
-// Referral Summary API
+// Referral Summary API for admin dashboard
 app.get("/referrals/summary", async (req, res) => {
   const summaryQuery = `
   SELECT 
@@ -504,7 +499,7 @@ app.get("/referrals/summary", async (req, res) => {
 `;
 
   try {
-    const [results] = await pool.query(summaryQuery);  // Using the connection pool
+    const [results] = await pool.query(summaryQuery);  
     const formatted = results.map((r) => ({
       referrer_msisdn: r.referrer_msisdn,
       total_referrals: r.total_referrals,
@@ -521,6 +516,8 @@ app.get("/referrals/summary", async (req, res) => {
   }
 });
 
+
+// Referral payment API
 app.post("/referrals/pay", async (req, res) => {
   const { referrer_msisdn, amount } = req.body;
 
@@ -550,7 +547,7 @@ app.post("/referrals/pay", async (req, res) => {
       return res.status(400).json({ error: "Amount exceeds pending balance" });
     }
 
-    // All good – insert payment
+    // insert payment
     await pool.query(
       "INSERT INTO referral_payments (referrer_msisdn, amount) VALUES (?, ?)",
       [referrer_msisdn, amount]
@@ -562,6 +559,61 @@ app.post("/referrals/pay", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+
+// Store External Game Score
+app.post("/submit-score", async (req, res) => {
+  const { gameName, score, msisdn } = req.body;
+
+  // Validate input
+  if (!gameName || !score || !msisdn) {
+    return res.status(400).json({ error: "All fields are required" });
+  }
+
+  const scoreNum = Number(score);
+  if (isNaN(scoreNum) || scoreNum < 0) {
+    return res.status(400).json({ error: "Score must be a non-negative number" });
+  }
+
+  try {
+    const today = new Date().toISOString().split("T")[0];
+
+    // Check for existing score today for the game and user
+    const [existingScores] = await pool.query(
+      "SELECT id, score FROM externalgamescore WHERE gameName = ? AND msisdn = ? AND DATE(timeStamp) = ?",
+      [gameName, msisdn, today]
+    );
+
+    if (existingScores.length > 0) {
+      const existingScore = existingScores[0].score;
+      const id = existingScores[0].id;
+
+      // Update only if new score is higher
+      if (scoreNum > existingScore) {
+        await pool.query(
+          "UPDATE externalgamescore SET score = ?, timeStamp = NOW() WHERE id = ?",
+          [scoreNum, id]
+        );
+        return res.json({ message: "Score updated with today’s best" });
+      } else {
+        return res.json({ message: "Score not updated (lower than today’s best)" });
+      }
+    } else {
+      // Insert new score record if none exists today
+      await pool.query(
+        "INSERT INTO externalgamescore (gameName, score, msisdn) VALUES (?, ?, ?)",
+        [gameName, scoreNum, msisdn]
+      );
+      return res.json({ message: "Score submitted successfully" });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+
+
 
 // Start the server
 const PORT = process.env.PORT || 5000;
